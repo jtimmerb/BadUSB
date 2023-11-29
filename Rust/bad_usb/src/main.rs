@@ -1,4 +1,7 @@
 use libusb::{Context, DeviceHandle};
+extern crate hidapi;
+
+let api = hidapi::HidApi::new().unwrap();
 
 const AUDIO: u8 = 0x01;
 const COMM: u8 = 0x02;
@@ -39,8 +42,10 @@ fn print_endpoint(endpdesc: &libusb::EndpointDescriptor) {
     println!("    Max Packet Length: {}", max_packet_size);
 }
 
-fn read_from_usb(handle: &DeviceHandle, addr: u8, max_packet_size: u16) {
-    let mut buffer = vec![0u8; max_packet_size as usize];
+fn read_from_usb(handle: &DeviceHandle, addr: u8, max_packet_size: u16, iface_num: u8) {
+    	
+    let mut buffer = [0u8; max_packet_size];
+    handle.claim_interface(iface_num);
     match handle.read_bulk(addr, &mut buffer, std::time::Duration::from_secs(1)) {
         Ok(transferred) => {
             println!("Read {} bytes from USB: {:?}", transferred, buffer);
@@ -49,6 +54,7 @@ fn read_from_usb(handle: &DeviceHandle, addr: u8, max_packet_size: u16) {
             eprintln!("Error reading from USB: {}", err);
         }
     }
+    
 }
 
 fn list_usb_interfaces() {
@@ -76,7 +82,7 @@ fn list_usb_interfaces() {
                 print_interface(&ifacedesc);
                 for endpdesc in ifacedesc.endpoint_descriptors() {
                     print_endpoint(&endpdesc);
-                    read_from_usb(&handle, endpdesc.address(), endpdesc.max_packet_size());
+                    read_from_usb(&handle, endpdesc.address(), endpdesc.max_packet_size(), ifacedesc.interface_number());
                 }
             }
         }
