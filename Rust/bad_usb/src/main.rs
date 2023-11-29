@@ -45,6 +45,14 @@ fn print_endpoint(endpdesc: &libusb::EndpointDescriptor) {
 fn read_from_usb(handle: &mut DeviceHandle, addr: u8, max_packet_size: u16, iface_num: u8) {
     	
     let mut buffer = vec![0u8; max_packet_size.into()];
+    match handle.detach_kernel_driver(iface_num){
+	Ok(_) => {
+            println!("Detached Interface");
+        }
+        Err(err) => {
+            eprintln!("Error detaching USB Interface: {}", err);
+        }
+    }
     match handle.claim_interface(iface_num){
 	Ok(_) => {
 	    println!("Claimed Interface");
