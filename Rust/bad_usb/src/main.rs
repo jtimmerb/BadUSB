@@ -42,10 +42,17 @@ fn print_endpoint(endpdesc: &libusb::EndpointDescriptor) {
     println!("    Max Packet Length: {}", max_packet_size);
 }
 
-fn read_from_usb(handle: &DeviceHandle, addr: u8, max_packet_size: u16, iface_num: u8) {
+fn read_from_usb(handle: &mut DeviceHandle, addr: u8, max_packet_size: u16, iface_num: u8) {
     	
-    let mut buffer = [0u8; max_packet_size];
-    handle.claim_interface(iface_num);
+    let mut buffer = vec![0u8; max_packet_size.into()];
+    match handle.claim_interface(iface_num){
+	Ok(_) => {
+	    println!("Claimed Interface");
+	}
+	Err(err) => {
+	    eprintln!("Error claiming USB Interface: {}", err);
+	}
+    }
     match handle.read_bulk(addr, &mut buffer, std::time::Duration::from_secs(1)) {
         Ok(transferred) => {
             println!("Read {} bytes from USB: {:?}", transferred, buffer);
@@ -67,7 +74,7 @@ fn list_usb_interfaces() {
         let device_desc = device.device_descriptor().expect("Failed to get device descriptor");
         println!("Device {:04x}:{:04x}", device_desc.vendor_id(), device_desc.product_id());
 
-        let handle = match device.open() {
+        let mut handle = match device.open() {
             Ok(handle) => handle,
             Err(_) => {
                 println!("Error Opening Device");
@@ -82,7 +89,7 @@ fn list_usb_interfaces() {
                 print_interface(&ifacedesc);
                 for endpdesc in ifacedesc.endpoint_descriptors() {
                     print_endpoint(&endpdesc);
-                    read_from_usb(&handle, endpdesc.address(), endpdesc.max_packet_size(), ifacedesc.interface_number());
+                    read_from_usb(&mut handle, endpdesc.address(), endpdesc.max_packet_size(), ifacedesc.interface_number());
                 }
             }
         }
