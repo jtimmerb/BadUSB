@@ -1,7 +1,7 @@
 use libusb::{Context, DeviceHandle};
-extern crate hidapi;
+//extern crate hidapi;
 
-const api = hidapi::HidApi::new().unwrap();
+//const api = hidapi::HidApi::new().unwrap();
 
 const AUDIO: u8 = 0x01;
 const COMM: u8 = 0x02;
