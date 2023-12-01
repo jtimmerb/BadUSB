@@ -1,43 +1,19 @@
-use rusb::{Context, Device, DeviceHandle, HotplugBuilder, InterfaceDescriptor, UsbContext};
-use std::{thread, time};
+use rusb::{Context, Device, DeviceHandle, InterfaceDescriptor, UsbContext};
+use anyhow::{Result};
+use std::sync::{Arc, Mutex};
+use std::thread;
+mod app;
+mod usb;
+mod detector;
 
 const HID: u8 = 0x03;
 const HID_KEYBOARD: u8 = 0x01;
-
-struct HotPlugHandler;
-
-impl<'a, T> rusb::Hotplug<T> for HotPlugHandler
-where
-    T: UsbContext + 'static,
-{
-    fn device_arrived(&mut self, device: Device<T>) {
-        let dev_desc = device.device_descriptor().expect("Error retrieving device descriptor");
-        if dev_desc.vendor_id() != 0x1d6b {
-            println!("device arrived {:?}", device);
-            thread::spawn(|| {
-                read_indef(device);
-            });
-        }
-    }
-    fn device_left(&mut self, device: Device<T>) {
-        println!("device left {:?}", device);
-    }
-}
-
-impl Drop for HotPlugHandler {
-    fn drop(&mut self) {
-        println!("HotPlugHandler dropped");
-    }
-}
 
 fn read_indef<T>(device: Device<T>)
 where
     T: UsbContext,
 {
-    let mut handle = match device.open() {
-        Ok(handle) => handle,
-        Err(e) => eprintln!("Device found but failed to open: {}", e),
-    };
+    let mut handle = device.open().expect("Unable to open device");
     let active_config = handle.active_configuration().expect("Failed to get active configuration");
     let config = device.config_descriptor(active_config-1).expect("No config descriptor");
 
@@ -113,34 +89,8 @@ fn read_from_usb<T: UsbContext>(handle: &mut DeviceHandle<T>, addr: u8, max_pack
     }   
 }
 
-fn run_hotplug() -> rusb::Result<()> {
-    if rusb::has_hotplug() {
-        let context = Context::new()?;
-
-        let mut reg = Some(
-            HotplugBuilder::new()
-                .enumerate(true)
-                .register(&context, Box::new(HotPlugHandler {}))?,
-        );
-
-        // loop{
-        context.handle_events(None).unwrap();
-        if let Some(reg) = reg.take() {
-            context.unregister_callback(reg);
-        }
-            // break;
-        // }
-            
-
-        Ok(())
-    } else {
-        eprint!("libusb hotplug api unsupported");
-        Ok(())
-    }
+fn main() -> Result<()> {
+    let app = app::App::new()?;
+    app.run()?;
+    Ok(())
 }
-
-fn main() {
-    let _ = run_hotplug();
-    loop{}
-}
-
