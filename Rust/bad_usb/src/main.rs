@@ -1,5 +1,5 @@
 use rusb::{Context, Device, DeviceHandle, HotplugBuilder, InterfaceDescriptor, UsbContext};
-use std::{thread};
+use std::{thread, time};
 
 const HID: u8 = 0x03;
 const HID_KEYBOARD: u8 = 0x01;
@@ -14,7 +14,7 @@ where
         let dev_desc = device.device_descriptor().expect("Error retrieving device descriptor");
         if dev_desc.vendor_id() != 0x1d6b {
             println!("device arrived {:?}", device);
-            thread::spawn(move || {
+            thread::spawn(|| {
                 read_indef(device);
             });
         }
@@ -30,13 +30,13 @@ impl Drop for HotPlugHandler {
     }
 }
 
-fn read_indef<'a, T>(device: Device<T>)
+fn read_indef<T>(device: Device<T>)
 where
-    T: UsbContext + 'static,
+    T: UsbContext,
 {
     let mut handle = match device.open() {
         Ok(handle) => handle,
-        Err(e) => panic!("Device found but failed to open: {}", e),
+        Err(e) => eprintln!("Device found but failed to open: {}", e),
     };
     let active_config = handle.active_configuration().expect("Failed to get active configuration");
     let config = device.config_descriptor(active_config-1).expect("No config descriptor");
@@ -104,7 +104,9 @@ fn read_from_usb<T: UsbContext>(handle: &mut DeviceHandle<T>, addr: u8, max_pack
                 eprintln!("Error reading from USB: {}", err);
                 match err {
                     rusb::Error::Timeout => continue,
-                    _ => break,
+                    _ => {
+                        break;
+                    },
                 }
             }
         }
