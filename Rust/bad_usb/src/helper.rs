@@ -1,40 +1,41 @@
-use rusb::{InterfaceDescriptor, EndpointDescriptor};
+use rusb::{DeviceHandle, InterfaceDescriptor, UsbContext};
 
-const AUDIO: u8 = 0x01;
-const COMM: u8 = 0x02;
 const HID: u8 = 0x03;
 const HID_KEYBOARD: u8 = 0x01;
-const HID_MOUSE: u8 = 0x02;
 
-fn print_interface(ifacedesc: &InterfaceDescriptor) {
-    let class = ifacedesc.class_code();
-    let sclass = ifacedesc.sub_class_code();
-    let prot = ifacedesc.protocol_code();
+pub fn is_keyboard(idesc: &InterfaceDescriptor) -> bool{
+    let class = idesc.class_code();
+    let prot = idesc.protocol_code();
 
-    let (class_str, prot_str) = match class {
-        AUDIO => ("Audio", "Don't Care"),
-        COMM => ("Communications", "Don't Care"),
+    match class {
         HID => {
-            let prot_str = match prot {
-                HID_KEYBOARD => "Keyboard",
-                HID_MOUSE => "Mouse",
-                _ => "Don't Care",
-            };
-            ("Human Interface Device", prot_str)
+            match prot {
+                HID_KEYBOARD => return true,
+                _ => return false,
+            }
         }
-        _ => ("Don't Care", "Don't Care"),
-    };
-
-    println!("  Interface {}", ifacedesc.interface_number());
-    println!("   Class: {} {}", class, class_str);
-    println!("   Subclass: {}", sclass);
-    println!("   Protocol: {} {}", prot, prot_str);
+        _ => return false,
+    }
 }
 
-fn print_endpoint(endpdesc: &EndpointDescriptor) {
-    let addr = endpdesc.address();
-    let max_packet_size = endpdesc.max_packet_size();
+pub fn detach_interface<T: UsbContext>(handle: &mut DeviceHandle<T>, iface_num: u8){
+    match handle.detach_kernel_driver(iface_num){
+        Ok(_) => {
+            println!("Detached Interface");
+        }
+        Err(err) => {
+            eprintln!("Error detaching USB Interface: {}", err);
+        }
+    }
+}
 
-    println!("    EndPoint Address: {}", addr);
-    println!("    Max Packet Length: {}", max_packet_size);
+pub fn claim_interface<T: UsbContext>(handle: &mut DeviceHandle<T>, iface_num: u8){
+    match handle.claim_interface(iface_num){
+        Ok(_) => {
+            println!("Claimed Interface");
+        }
+        Err(err) => {
+            eprintln!("Error claiming USB Interface: {}", err);
+        }
+    }
 }
