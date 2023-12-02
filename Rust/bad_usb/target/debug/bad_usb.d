@@ -1,1 +1,0 @@
-/Users/echo/BadUSB/Rust/bad_usb/target/debug/bad_usb: /Users/echo/BadUSB/Rust/bad_usb/src/app.rs /Users/echo/BadUSB/Rust/bad_usb/src/detector.rs /Users/echo/BadUSB/Rust/bad_usb/src/helper.rs /Users/echo/BadUSB/Rust/bad_usb/src/main.rs /Users/echo/BadUSB/Rust/bad_usb/src/usb.rs
