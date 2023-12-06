@@ -1,6 +1,6 @@
 use crate::usb;
 use crate::detector;
-use crate::helper::{is_keyboard, detach_interface, claim_interface};
+use crate::helper::{check_class, detach_interface, claim_interface, print_read};
 use anyhow::{Result};
 use std::sync::mpsc::{Sender, channel, TryRecvError};
 use std::sync::{Arc, Mutex};
@@ -15,6 +15,7 @@ pub struct App{
 }
 
 impl usb::UsbCallback for App {
+
     fn device_added(&mut self, dev_vid: u16, dev_pid: u16){
         self.vid = dev_vid;
         self.pid = dev_pid;
@@ -28,50 +29,45 @@ impl usb::UsbCallback for App {
             let mut handle = open_device_with_vid_pid(dev_vid, dev_pid).unwrap();
             let device = handle.device();
             let active_config = handle.active_configuration().expect("Failed to get active configuration");
-            let config = device.config_descriptor(active_config-1).expect("No config descriptor");
+            let config = device.config_descriptor(0).expect("No config descriptor");
+            // println!("{}", active_config);
+            let mut iface = config.interfaces().nth(active_config.into()).unwrap();
+            let mut idesc = iface.descriptors().next().unwrap();
+            let (valid, prot) = check_class(&idesc);
 
-            for iface in config.interfaces(){
-
-                let idesc = iface.descriptors().next().expect("No interface descriptors");
-
-                if is_keyboard(&idesc){
-                    let endpdesc = idesc.endpoint_descriptors().next().expect("No endpoint descriptors");
-                    detach_interface(&mut handle, idesc.interface_number());
-                    claim_interface(&mut handle, idesc.interface_number());
-                    // handle.set_auto_detach_kernel_driver(true).expect("Could not set auto detach");
-                    let mut buffer = vec![0u8; endpdesc.max_packet_size().into()];
-                    loop{
-                        match handle.read_bulk(endpdesc.address(), &mut buffer, std::time::Duration::from_secs(5)) {
-                            Ok(transferred) => {
-                                println!("Read {} bytes from USB: {:?}", transferred, buffer);
-                            }
-                            Err(err) => {
-                                eprintln!("Error reading from USB: {}", err);
-                                match err {
-                                    rusb::Error::Timeout => continue,
-                                    rusb::Error::NoDevice => break,
-                                    _ => {
-                                        continue;
-                                    },
-                                }
-                            }
-                        }
-                        let cont = rx.try_recv();
-                        //cont is received in wrong data type
-                        //disconnect does not terminate thread
-                        //above rusb::Error::NoDevice is what ends read thread and returns control to handler
-                        match cont {
-                            Ok(Ok(1)) | Err(TryRecvError::Disconnected)=> {
-                                println!("Terminating.");
-                                break;
-                            }
-                            Err(TryRecvError::Empty) => {}
-                            Ok(_) => break,
-                        }
-                    }   
-                    break;
-                }       
+            if prot == 1 {
+                iface = config.interfaces().nth(0).unwrap();
+                idesc = iface.descriptors().next().unwrap();
+            }else{
+                iface = config.interfaces().nth(active_config.into()).unwrap();
+                idesc = iface.descriptors().next().unwrap();
             }
+            //Unsure about where keyboard protocol is supposed to show up
+            //Active lines up for mouse but keyboard has to go through weird inputs to switch to specific interface
+            if valid {
+                let endpdesc = idesc.endpoint_descriptors().next().expect("No endpoint descriptors");
+                detach_interface(&mut handle, idesc.interface_number());
+                claim_interface(&mut handle, idesc.interface_number());
+                // handle.set_auto_detach_kernel_driver(true).expect("Could not set auto detach");
+                loop{
+                    if !(print_read(&handle, endpdesc.address(), endpdesc.max_packet_size().into(), prot)) {
+                        break;
+                    }
+                    
+                    let cont = rx.try_recv();
+                    //cont is received in wrong data type
+                    //device_removed does not terminate thread
+                    //above rusb::Error::NoDevice is what ends read thread and returns control to handler
+                    match cont {
+                        Ok(Ok(1)) | Err(TryRecvError::Disconnected)=> {
+                            println!("Terminating.");
+                            break;
+                        }
+                        Err(TryRecvError::Empty) => {}
+                        Ok(_) => break,
+                    }
+                }   
+            }       
         });
     }
 
